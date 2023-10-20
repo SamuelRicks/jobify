@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "setup-project": "npm i && cd project1 && npm i",
+    "setup-production-app": "npm i && cd project1 && npm i && npm run build",
     "server": "nodemon server",
     "project1": "cd project1 && npm run dev",
     "dev": "concurrently --kill-others-on-fail \"npm run server\" \"npm run project1\""
