@@ -1,14 +1,29 @@
-import { Outlet, redirect, useLoaderData, useNavigate } from "react-router-dom";
+import {
+  Outlet,
+  redirect,
+  useLoaderData,
+  useNavigate,
+  useNavigation,
+} from "react-router-dom";
 import Wrapper from "../assets/wrappers/Dashboard";
-import { BigSideBar, SmallSideBar, NavBar } from "../components";
-import { createContext, useState, useContext } from "react";
+import { BigSideBar, SmallSideBar, NavBar, Loading } from "../components";
+import { createContext, useState, useContext, useEffect } from "react";
 import customFetch from "../utils/customFetch";
 import { toast } from "react-toastify";
+import { useQuery } from "@tanstack/react-query";
 
-export const loader = async () => {
-  try {
+const userQuery = {
+  queryKey: ["user"],
+  queryFn: async () => {
     const { data } = await customFetch.get("/user/current-user");
     return data;
+  },
+};
+
+export const loader = (queryClient) => async () => {
+  try {
+    const response = queryClient.ensureQueryData(userQuery);
+    return response;
   } catch (error) {
     return redirect("/");
   }
@@ -16,11 +31,14 @@ export const loader = async () => {
 
 const DashboardContext = createContext();
 
-const DashboardLayout = ({ isDarkThemeEnabled }) => {
-  const { user } = useLoaderData();
+const DashboardLayout = ({ isDarkThemeEnabled, queryClient }) => {
+  const { user } = useQuery(userQuery).data;
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const isLoading = navigation.state === "loading";
   const [showSidebar, setShowSidebar] = useState(false);
   const [isDarkThemed, setIsDarkThemed] = useState(isDarkThemeEnabled);
+  const [isAuthError, setIsAuthError] = useState(false);
 
   const toggleDarkTheme = () => {
     const darkTheme = !isDarkThemed;
@@ -36,8 +54,26 @@ const DashboardLayout = ({ isDarkThemeEnabled }) => {
   const logoutUser = async () => {
     navigate("/");
     await customFetch.get("/auth/logout");
+    queryClient.invalidateQueries();
     toast.success("Logged Out");
   };
+
+  customFetch.interceptors.response.use(
+    (response) => {
+      return response;
+    },
+    (error) => {
+      if (error?.response?.status === 401) {
+        setIsAuthError(true);
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  useEffect(() => {
+    if (!isAuthError) return;
+    logoutUser();
+  }, [isAuthError]);
 
   return (
     <DashboardContext.Provider
@@ -57,7 +93,7 @@ const DashboardLayout = ({ isDarkThemeEnabled }) => {
           <div>
             <NavBar />
             <div className="dashboard-page">
-              <Outlet context={{ user }} />
+              {isLoading ? <Loading /> : <Outlet context={{ user }} />}
             </div>
           </div>
         </main>
